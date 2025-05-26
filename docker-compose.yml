@@ -1,0 +1,246 @@
+services:
+  # ─── MongoDB Cluster ───
+  mongo1:
+    image: mongo:6
+    container_name: mongo1
+    hostname: mongo1
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo1_data:/data/db
+      - ./init/mongo/mongo.key:/etc/mongo-keyfile:ro
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+    command: mongod --replSet rs0 --bind_ip_all --keyFile /etc/mongo-keyfile
+    networks:
+      - mongo_net
+
+  mongo2:
+    image: mongo:6
+    container_name: mongo2
+    hostname: mongo2
+    volumes:
+      - mongo2_data:/data/db
+      - ./init/mongo/mongo.key:/etc/mongo-keyfile:ro
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+    command: mongod --replSet rs0 --bind_ip_all --keyFile /etc/mongo-keyfile
+    networks:
+      - mongo_net
+
+  mongo3:
+    image: mongo:6
+    container_name: mongo3
+    hostname: mongo3
+    volumes:
+      - mongo3_data:/data/db
+      - ./init/mongo/mongo.key:/etc/mongo-keyfile:ro
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+    command: mongod --replSet rs0 --bind_ip_all --keyFile /etc/mongo-keyfile
+    networks:
+      - mongo_net
+
+  mongoinit:
+    image: mongo:6
+    container_name: mongoinit
+    depends_on:
+      - mongo1
+      - mongo2
+      - mongo3
+    volumes:
+      - ./init/mongo/init.js:/init.js:ro
+      - ./init/mongo/mongo.key:/etc/mongo-keyfile:ro
+    networks:
+      - mongo_net
+    entrypoint: >
+      bash -c "
+      echo 'Waiting for MongoDB to be ready...' &&
+      sleep 10 &&
+      echo 'Initiating replica set...' &&
+      mongosh --host mongo1 --username root --password example --eval '
+        try {
+          rs.initiate({
+            _id: \"rs0\",
+            members: [
+              { _id: 0, host: \"mongo1:27017\" },
+              { _id: 1, host: \"mongo2:27017\" },
+              { _id: 2, host: \"mongo3:27017\" }
+            ]
+          });
+        } catch (e) {
+          print(\"Replica set already initialized or error: \", e.message);
+        }
+      ' &&
+      echo 'Waiting for PRIMARY status...' &&
+      until mongosh --host mongo1 --username root --password example --eval 'rs.isMaster().ismaster' | grep -q 'true'; do
+        echo 'Still waiting for PRIMARY...';
+        sleep 2;
+      done &&
+      echo 'PRIMARY confirmed. Running init.js...' &&
+      mongosh --host mongo1 --username root --password example /init.js
+      "
+    restart: "no"
+
+  # ─── Cassandra Cluster ───
+  cass1:
+    image: cassandra:4
+    container_name: cass1
+    hostname: cass1
+    environment:
+      - CASSANDRA_SEEDS=cass1,cass2
+      - CASSANDRA_CLUSTER_NAME=airport_cluster
+      - CASSANDRA_DC=dc1
+      - MAX_HEAP_SIZE=512M
+      - HEAP_NEWSIZE=128M
+    volumes:
+      - cass1_data:/var/lib/cassandra
+    networks:
+      - cassandra_net
+
+  cass2:
+    image: cassandra:4
+    container_name: cass2
+    hostname: cass2
+    environment:
+      - CASSANDRA_SEEDS=cass1,cass2
+      - CASSANDRA_CLUSTER_NAME=airport_cluster
+      - CASSANDRA_DC=dc1
+      - MAX_HEAP_SIZE=512M
+      - HEAP_NEWSIZE=128M
+    volumes:
+      - cass2_data:/var/lib/cassandra
+    networks:
+      - cassandra_net
+
+  cass3:
+    image: cassandra:4
+    container_name: cass3
+    hostname: cass3
+    environment:
+      - CASSANDRA_SEEDS=cass1,cass2
+      - CASSANDRA_CLUSTER_NAME=airport_cluster
+      - CASSANDRA_DC=dc1
+      - MAX_HEAP_SIZE=512M
+      - HEAP_NEWSIZE=128M
+    volumes:
+      - cass3_data:/var/lib/cassandra
+    networks:
+      - cassandra_net
+
+  cassandrainit:
+    image: cassandra:4
+    container_name: cassandrainit
+    depends_on:
+      - cass1
+    volumes:
+      - ./init/cassandra/init.cql:/init.cql:ro
+    networks:
+      - cassandra_net
+    entrypoint: >
+      bash -c "
+      echo 'Waiting for Cassandra to accept CQL connections...' &&
+      for i in {1..30}; do
+        cqlsh cass1 -e 'SHOW VERSION;' >/dev/null 2>&1 && break
+        echo 'Cassandra not ready yet...';
+        sleep 3;
+      done &&
+      echo 'Cassandra is up. Executing init.cql...' &&
+      cqlsh cass1 -f /init.cql
+      "
+    restart: "no"
+
+  # ─── Neo4j Cluster (CORE) ───
+  neo4j1:
+    image: neo4j:4.3-enterprise
+    container_name: neo4j1
+    hostname: neo4j1
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      NEO4J_ACCEPT_LICENSE_AGREEMENT: "yes"
+      NEO4J_AUTH: neo4j/password
+      NEO4J_dbms_mode: CORE
+      NEO4J_server_default__listen__address: 0.0.0.0
+      NEO4J_server_default__advertised__address: neo4j1
+      NEO4J_causal__clustering_discovery__advertised__address: neo4j1:5000
+      NEO4J_causal__clustering_transaction__advertised__address: neo4j1:6000
+      NEO4J_causal__clustering_raft__advertised__address: neo4j1:7000
+      NEO4J_causal__clustering_initial__discovery__members: neo4j1:5000,neo4j2:5000,neo4j3:5000
+      NEO4J_causal__clustering_minimum__core__cluster__size__at__formation: 3
+    volumes:
+      - neo4j1_data:/data
+    networks:
+      neo4j_net:
+        aliases:
+          - neo4j1
+
+  neo4j2:
+    image: neo4j:4.3-enterprise
+    container_name: neo4j2
+    hostname: neo4j2
+    ports:
+      - "7475:7474"
+      - "7688:7687"
+    environment:
+      NEO4J_ACCEPT_LICENSE_AGREEMENT: "yes"
+      NEO4J_AUTH: neo4j/password
+      NEO4J_dbms_mode: CORE
+      NEO4J_server_default__listen__address: 0.0.0.0
+      NEO4J_server_default__advertised__address: neo4j2
+      NEO4J_causal__clustering_discovery__advertised__address: neo4j2:5000
+      NEO4J_causal__clustering_transaction__advertised__address: neo4j2:6000
+      NEO4J_causal__clustering_raft__advertised__address: neo4j2:7000
+      NEO4J_causal__clustering_initial__discovery__members: neo4j1:5000,neo4j2:5000,neo4j3:5000
+      NEO4J_causal__clustering_minimum__core__cluster__size__at__formation: 3
+    volumes:
+      - neo4j2_data:/data
+    networks:
+      neo4j_net:
+        aliases:
+          - neo4j2
+
+  neo4j3:
+    image: neo4j:4.3-enterprise
+    container_name: neo4j3
+    hostname: neo4j3
+    ports:
+      - "7476:7474"
+      - "7689:7687"
+    environment:
+      NEO4J_ACCEPT_LICENSE_AGREEMENT: "yes"
+      NEO4J_AUTH: neo4j/password
+      NEO4J_dbms_mode: CORE
+      NEO4J_server_default__listen__address: 0.0.0.0
+      NEO4J_server_default__advertised__address: neo4j3
+      NEO4J_causal__clustering_discovery__advertised__address: neo4j3:5000
+      NEO4J_causal__clustering_transaction__advertised__address: neo4j3:6000
+      NEO4J_causal__clustering_raft__advertised__address: neo4j3:7000
+      NEO4J_causal__clustering_initial__discovery__members: neo4j1:5000,neo4j2:5000,neo4j3:5000
+      NEO4J_causal__clustering_minimum__core__cluster__size__at__formation: 3
+    volumes:
+      - neo4j3_data:/data
+    networks:
+      neo4j_net:
+        aliases:
+          - neo4j3
+
+volumes:
+  mongo1_data:
+  mongo2_data:
+  mongo3_data:
+  cass1_data:
+  cass2_data:
+  cass3_data:
+  neo4j1_data:
+  neo4j2_data:
+  neo4j3_data:
+
+networks:
+  mongo_net:
+  cassandra_net:
+  neo4j_net:
