@@ -58,9 +58,9 @@ services:
       - mongo_net
     entrypoint: >
       bash -c "
-      echo '⏳ Waiting for MongoDB to be ready...' &&
+      echo 'Waiting for MongoDB to be ready...' &&
       sleep 10 &&
-      echo '🔧 Initiating replica set...' &&
+      echo 'Initiating replica set...' &&
       mongosh --host mongo1 --username root --password example --eval '
         try {
           rs.initiate({
@@ -75,12 +75,12 @@ services:
           print(\"Replica set already initialized or error: \", e.message);
         }
       ' &&
-      echo '🕒 Waiting for PRIMARY status...' &&
+      echo 'Waiting for PRIMARY status...' &&
       until mongosh --host mongo1 --username root --password example --eval 'rs.isMaster().ismaster' | grep -q 'true'; do
-        echo '⏳ Still waiting for PRIMARY...';
+        echo 'Still waiting for PRIMARY...';
         sleep 2;
       done &&
-      echo '✅ PRIMARY confirmed. Running init.js...' &&
+      echo 'PRIMARY confirmed. Running init.js...' &&
       mongosh --host mongo1 --username root --password example /init.js
       "
     restart: "no"
@@ -136,13 +136,13 @@ services:
       - cassandra_net
     entrypoint: >
       bash -c "
-      echo '⏳ Waiting for Cassandra to accept CQL connections...' &&
+      echo 'Waiting for Cassandra to accept CQL connections...' &&
       for i in {1..30}; do
         cqlsh cass1 -e 'SHOW VERSION;' >/dev/null 2>&1 && break
-        echo '🔄 Cassandra not ready yet...';
+        echo 'Cassandra not ready yet...';
         sleep 3;
       done &&
-      echo '✅ Cassandra is up. Executing init.cql...' &&
+      echo 'Cassandra is up. Executing init.cql...' &&
       cqlsh cass1 -f /init.cql
       "
     restart: "no"

@@ -7,6 +7,7 @@
 Убедитесь, что вы дали права на выполнение скриптам:
 
 ```bash
+sudo chmod 400 init/mongo/mongo.key
 chmod +x cluster_init.sh init/neo4j/init.sh
 ```
 

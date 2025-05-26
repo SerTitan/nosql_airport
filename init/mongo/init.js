@@ -1,7 +1,5 @@
-// Переключаемся на нужную базу
 db = db.getSiblingDB("airport");
 
-// Создание индексов и коллекций
 db.createCollection("flights");
 db.flights.createIndex({ departure_time: 1 });
 

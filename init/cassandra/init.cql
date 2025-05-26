@@ -2,7 +2,7 @@
 CREATE KEYSPACE IF NOT EXISTS airport
 WITH REPLICATION = {
   'class': 'SimpleStrategy',
-  'replication_factor': 3
+  'replication_factor': 2
 };
 
 USE airport;
