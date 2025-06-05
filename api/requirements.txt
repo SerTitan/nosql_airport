@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+pymongo
+neo4j
+cassandra-driver
+python-dotenv>=1.0

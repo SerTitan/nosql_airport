@@ -1,8 +1,35 @@
-// Аэропорты
+// ─── 1. Создаём узлы Airport ──────────────────────────────────────────────────
+// (оставляем ваши SVO и JFK, можно добавить ещё, если потребуется)
 CREATE (:Airport {code: "SVO", name: "Sheremetyevo", city: "Moscow", country: "Russia"});
 CREATE (:Airport {code: "JFK", name: "John F. Kennedy", city: "New York", country: "USA"});
+// Пример: добавим ещё пару аэропортов для теста маршрутов:
+CREATE (:Airport {code: "DXB", name: "Dubai Intl", city: "Dubai", country: "UAE"});
+CREATE (:Airport {code: "LHR", name: "Heathrow", city: "London", country: "UK"});
 
-// Рейсы (правильный формат даты)
+// ─── 2. Создаём ребра ROUTE_TO между Airport ─────────────────────────────────
+// Вот пример, как задать ребро с расстоянием в километрах. 
+// Если у вас есть реальный список маршрутов, добавьте все нужные.
+// Заметьте: для bidirectional обычно создают две ориентированные связи.
+
+MATCH (aSVO:Airport {code: "SVO"}), (aJFK:Airport {code: "JFK"})
+CREATE (aSVO)-[:ROUTE_TO {distance:7500}]->(aJFK),
+       (aJFK)-[:ROUTE_TO {distance:7500}]->(aSVO);
+
+MATCH (aSVO:Airport {code: "SVO"}), (aDXB:Airport {code: "DXB"})
+CREATE (aSVO)-[:ROUTE_TO {distance:5200}]->(aDXB),
+       (aDXB)-[:ROUTE_TO {distance:5200}]->(aSVO);
+
+MATCH (aJFK:Airport {code: "JFK"}), (aDXB:Airport {code: "DXB"})
+CREATE (aJFK)-[:ROUTE_TO {distance:11000}]->(aDXB),
+       (aDXB)-[:ROUTE_TO {distance:11000}]->(aJFK);
+
+MATCH (aDXB:Airport {code: "DXB"}), (aLHR:Airport {code: "LHR"})
+CREATE (aDXB)-[:ROUTE_TO {distance:5500}]->(aLHR),
+       (aLHR)-[:ROUTE_TO {distance:5500}]->(aDXB);
+
+// ─── 3. Сохраняем ваши остальные сущности (Flight, Passenger, …) ──────────
+
+// Рейсы (Flight)
 CREATE (:Flight {
   id: "FL1234",
   airline: "Aeroflot",
@@ -32,46 +59,48 @@ CREATE (:Baggage {id: "B456", weight: 23, status: "Checked-in"});
 // Задержки рейсов
 CREATE (:Delay {id: "D567", reason: "Weather", delay_time: 90});
 
-// События (Лог аэропорта) - с правильной датой
+// События (Log)
 CREATE (:Event {id: "E999", type: "Boarding", timestamp: datetime("2025-02-23T14:00:00")});
 
-// Рейсы между аэропортами
+// ─── 4. Связываем Flight с объектами ──────────────────────────────────────────
+
+// Рейсы между аэропортами (DEPARTS_FROM / ARRIVES_AT)
 MATCH (a1:Airport {code: "SVO"}), (a2:Airport {code: "JFK"}), (f:Flight {id: "FL1234"})
-CREATE (f)-[:DEPARTS_FROM]->(a1),
-       (f)-[:ARRIVES_AT]->(a2);
+  CREATE (f)-[:DEPARTS_FROM]->(a1),
+         (f)-[:ARRIVES_AT]->(a2);
 
 // Пассажир покупает билет
 MATCH (p:Passenger {id: "P123"}), (t:Ticket {id: "T789"})
-CREATE (p)-[:HAS_TICKET]->(t);
+  CREATE (p)-[:HAS_TICKET]->(t);
 
 // Билет относится к рейсу
 MATCH (t:Ticket {id: "T789"}), (f:Flight {id: "FL1234"})
-CREATE (t)-[:FOR_FLIGHT]->(f);
+  CREATE (t)-[:FOR_FLIGHT]->(f);
 
 // Экипаж назначен на рейс
 MATCH (c:Crew {id: "C456"}), (f:Flight {id: "FL1234"})
-CREATE (c)-[:ASSIGNED_TO]->(f);
+  CREATE (c)-[:ASSIGNED_TO]->(f);
 
 // Самолет используется в рейсе
 MATCH (ac:Aircraft {id: "A320"}), (f:Flight {id: "FL1234"})
-CREATE (ac)-[:USED_IN]->(f);
+  CREATE (ac)-[:USED_IN]->(f);
 
 // Выход на посадку для рейса
 MATCH (f:Flight {id: "FL1234"}), (g:Gate {id: "G5"})
-CREATE (f)-[:HAS_GATE]->(g);
+  CREATE (f)-[:HAS_GATE]->(g);
 
 // Багаж принадлежит пассажиру
 MATCH (b:Baggage {id: "B456"}), (p:Passenger {id: "P123"})
-CREATE (b)-[:BELONGS_TO]->(p);
+  CREATE (b)-[:BELONGS_TO]->(p);
 
-// Багаж связан с рейсом
+// Багаж на рейсе
 MATCH (b:Baggage {id: "B456"}), (f:Flight {id: "FL1234"})
-CREATE (b)-[:LOADED_ON]->(f);
+  CREATE (b)-[:LOADED_ON]->(f);
 
 // Задержка связана с рейсом
 MATCH (d:Delay {id: "D567"}), (f:Flight {id: "FL1234"})
-CREATE (d)-[:AFFECTS]->(f);
+  CREATE (d)-[:AFFECTS]->(f);
 
-// Событие в аэропорту связано с рейсом
+// Событие связано с рейсом
 MATCH (e:Event {id: "E999"}), (f:Flight {id: "FL1234"})
-CREATE (e)-[:RELATED_TO]->(f);
+  CREATE (e)-[:RELATED_TO]->(f);

@@ -15,7 +15,7 @@ CREATE TABLE flights_by_airport (
     arrival_time TIMESTAMP,
     airline TEXT,
     status TEXT,
-    PRIMARY KEY (airport_code, departure_time)
+    PRIMARY KEY ((airport_code), departure_time, flight_id)
 ) WITH CLUSTERING ORDER BY (departure_time DESC);
 
 -- Таблица рейсов (по авиакомпании)

@@ -229,6 +229,33 @@ services:
         aliases:
           - neo4j3
 
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    command: >
+      sh -c "echo 'жду 180 сек, пока поднимутся БД…';
+             sleep 180;
+             uvicorn api.main:app --host 0.0.0.0 --port 8000"
+    environment:
+      CASSANDRA_HOSTS: cass1,cass2,cass3
+      MONGO_URI: mongodb://root:example@mongo1,mongo2,mongo3/?replicaSet=rs0&authSource=admin
+      NEO4J_URI: bolt://neo4j1:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASS: password
+    networks:
+      mongo_net:
+        aliases:
+          - mongo1
+      cassandra_net:
+      neo4j_net:
+    ports:
+      - "8000:8000"
+    depends_on:
+      - cass1
+      - mongo1
+      - neo4j1
+
 volumes:
   mongo1_data:
   mongo2_data:
